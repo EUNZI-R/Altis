@@ -1,0 +1,109 @@
+#include <SoftwareSerial.h> 
+#include <TinyGPS++.h> 
+ 
+// GPS 및 시리얼 설정 
+TinyGPSPlus gps;                  // TinyGPS++ 객체 생성 
+SoftwareSerial gpsSerial(3, 2);   // GPS 모듈 RX, TX 핀 설정 (아두이노 핀 4, 3) 
+ 
+// PPS 핀 및 플래그 
+volatile bool ppsReceived = false; // PPS 신호 플래그 
+volatile unsigned long ppsTime = 0; // 마지막 PPS 신호 시간 
+ 
+// UBX 명령: CFG-NAV5 설정 (Airborne <1G Mode) 
+uint8_t ubxAirborneMode[] = { 
+  0xB5, 0x62, // UBX 헤더 
+  0x06, 0x24, // 메시지 클래스 및 ID (CFG-NAV5) 
+  0x24, 0x00, // 페이로드 길이 (36 bytes) 
+  0xFF, 0xFF, // 마스크 
+  0x06,       // 동적 모드 (Airborne <1G Mode) 
+  0x00,       // 고정값 
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 나머지 페이로드 (기본값) 
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+  0x16, 0xDC  // 체크섬 (CK_A, CK_B) 
+}; 
+ 
+// 초기화 
+void setup() { 
+  Serial.begin(9600);         // PC와의 직렬 통신 
+  gpsSerial.begin(9600);      // GPS 모듈과 통신 시작 
+ 
+  // PPS 핀 설정 
+  pinMode(2, INPUT);          // PPS 핀 (디지털 핀 2) 입력 모드 설정 
+  attachInterrupt(digitalPinToInterrupt(2), handlePPS, RISING); // PPS 신호 인터럽트 
+ 
+ 
+  Serial.println("GPS 모듈 설정 중..."); 
+ 
+  // 동적 모드 설정 (Airborne <1G Mode) 
+  sendUBXCommand(ubxAirborneMode, sizeof(ubxAirborneMode)); 
+  Serial.println("동적 모드 설정 완료: Airborne <1G Mode"); 
+ 
+  Serial.println("GPS 및 PPS 신호 초기화 중..."); 
+} 
+ 
+// 메인 루프 
+void loop() { 
+  while (gpsSerial.available()) { 
+    char c = gpsSerial.read(); 
+    gps.encode(c); // GPS 데이터 파싱 
+ 
+    // 위치 정보 출력 (위도, 경도) 
+    if (gps.location.isUpdated()) { 
+      Serial.print("위도: "); 
+      Serial.println(gps.location.lat(), 6); 
+      Serial.print("경도: "); 
+      Serial.println(gps.location.lng(), 6); 
+    } 
+ 
+    // 속도 정보 출력 
+    if (gps.speed.isUpdated()) { 
+      Serial.print("속도: "); 
+      Serial.print(gps.speed.kmph()); 
+      Serial.println(" km/h"); 
+    } 
+ 
+    // GPS 시간 출력 
+    if (gps.time.isUpdated()) { 
+      Serial.print("GPS 시간: "); 
+      Serial.print(gps.time.hour()); 
+      Serial.print(":"); 
+      Serial.print(gps.time.minute()); 
+      Serial.print(":"); 
+      Serial.print(gps.time.second()); 
+      Serial.println(" UTC"); 
+    } 
+ 
+    // 신호 품질 정보 출력 (위성 수, HDOP) 
+    if (gps.satellites.isUpdated()) { 
+      Serial.print("위성 수: "); 
+      Serial.println(gps.satellites.value()); 
+    } 
+    if (gps.hdop.isUpdated()) { 
+      Serial.print("HDOP: "); 
+      Serial.println(gps.hdop.value()); 
+    } 
+  } 
+ 
+  // PPS 신호가 감지되었는지 확인 
+  if (ppsReceived) { 
+    ppsReceived = false; // 플래그 리셋 
+    Serial.print("PPS 신호 감지! 현재 시간 (ms): "); 
+    Serial.println(ppsTime); 
+  } 
+ 
+  delay(500); // 0.5초마다 데이터 확인 
+} 
+ 
+// UBX 명령 전송 함수 
+void sendUBXCommand(uint8_t *command, uint8_t length) { 
+  for (uint8_t i = 0; i < length; i++) { 
+    gpsSerial.write(command[i]); 
+  } 
+} 
+ 
+// PPS 신호를 처리하는 인터럽트 서비스 루틴 
+void handlePPS() { 
+  ppsReceived = true;                // PPS 신호 플래그 설정 
+  ppsTime = millis();                // 현재 시간(ms) 저장 
+} 
