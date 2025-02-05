@@ -1,3 +1,4 @@
 참고 링크
 
 ESP32 softwareserial --> hardware :: https://answerofgod.tistory.com/entry/ESP32-%ED%95%98%EB%93%9C%EC%9B%A8%EC%96%B4-%EC%8B%9C%EB%A6%AC%EC%96%BC-%EB%B3%80%EA%B2%BD
+ESP32 하드웨어시리얼은 3개까지 사용가능(RX,TX) :: https://m.blog.naver.com/chandong83/222630154615
